@@ -97,6 +97,64 @@ app.get("/menu/cookie",(req,res)=>{
     });
 });
 
+//매장 검색 화면 페이지(사용자)
+app.get("/store",(req,res)=>{
+    db.collection("storelist").find({}).toArray((err,result)=>{
+        res.render("store",{storeData:result});
+    });
+});
+
+//매장 지역검색 결과화면 페이지(사용자)
+app.get("/search/local",(req,res)=>{
+    //시/도 선택시
+    if(req.query.city1 !== "" && req.query.city2 === ""){
+        db.collection("storelist").find({sido:req.query.city1}).toArray((err,result)=>{
+            res.render("store",{storeData:result});
+        });
+    }
+    //시/도 구/군 선택시
+    else if(req.query.city1 !== "" && req.query.city2 !== ""){
+        db.collection("storelist").find({sido:req.query.city1,sigugun:req.query.city2}).toArray((err,result)=>{
+            res.render("store",{storeData:result});
+        });
+    }
+    //아무것도 선택하지 않았을때
+    else{
+        res.redirect("/store");
+    }
+});
+
+//매장명으로 검색시 (사용자)
+app.get("/search/storename",(req,res)=>{
+
+    // query:   <-- store.ejs 파일에서 입력한 input text  -> req.query.name 
+    // path: <--- db  storelist 콜렉션에서 어떤 항목명으로 찾을건지 name
+
+    let storeSearch = [
+        {
+          $search: {
+            index: 'store_search',
+            text: {
+              query:req.query.name,
+              path:'name'
+            }
+          }
+        }
+      ] 
+    //검색어 입력시
+    if(req.query.name !== "") {
+        db.collection("storelist").aggregate(storeSearch).toArray((err,result)=>{
+            res.render("store",{storeData:result});
+        })
+    }
+    //검색어 미입력시
+    else{
+        res.redirect("/store");
+    }
+    
+});
+
+
 
 //관리자 화면 로그인 페이지
 app.get("/admin",(req,res)=>{
@@ -142,6 +200,32 @@ app.post("/add/prdlist",upload.single('thumbnail'),(req,res)=>{
         },(err,result)=>{
             db.collection("count").updateOne({name:"상품등록"},{$inc:{prdCount:1}},(err,result)=>{
                 res.redirect("/admin/prdlist"); //상품등록 페이지로 이동
+            });
+        })
+    });
+});
+
+//관리자 매장등록 페이지 경로
+app.get("/admin/storelist",(req,res)=>{
+    //모든 매장리스트 다 보여줌
+    db.collection("storelist").find({}).toArray((err,result)=>{
+        res.render("admin_store",{storeData:result,userData:req.user});
+    })
+});
+
+//매장등록페이지에서 전송한 값 데이터베이스에 삽입
+app.post("/addstore",(req,res)=>{
+    db.collection("count").findOne({name:"매장등록"},(err,result1)=>{
+        db.collection("storelist").insertOne({
+            num:result1.storeCount + 1,
+            name:req.body.name,
+            sido:req.body.city1,
+            sigugun:req.body.city2,
+            address:req.body.detail,
+            phone:req.body.phone
+        },(err,result)=>{
+            db.collection("count").updateOne({name:"매장등록"},{$inc:{storeCount:1}},(err,result)=>{
+                res.redirect("/admin/storelist"); //매장등록 페이지로 이동
             });
         })
     });
